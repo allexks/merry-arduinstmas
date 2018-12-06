@@ -42,9 +42,15 @@ static const unsigned char PROGMEM LOGO16_GLCD_BMP[] =
 #define GREEN_PIN 10
 #define ORANGE_PIN 6
 #define YELLOW_PIN 2
-#define NUM_PINS 4
+#define NUM_PINS 5
 
-const int PINS[NUM_PINS] = {WHITE_PIN, GREEN_PIN, YELLOW_PIN, ORANGE_PIN};
+const int PINS[NUM_PINS] = {
+    WHITE_PIN,
+    GREEN_PIN,
+    LED_BUILTIN,
+    YELLOW_PIN,
+    ORANGE_PIN
+};
 
 
 enum program_types {
