@@ -44,30 +44,47 @@ static const unsigned char PROGMEM LOGO16_GLCD_BMP[] =
 #define YELLOW_PIN 2
 #define NUM_PINS 4
 
-const int PINS[NUM_PINS] = {WHITE_PIN, GREEN_PIN, ORANGE_PIN, YELLOW_PIN};
+const int PINS[NUM_PINS] = {WHITE_PIN, GREEN_PIN, YELLOW_PIN, ORANGE_PIN};
 
-enum modes {
+
+enum program_types {
   ALL_ON,
   ALL_BLINK_CONSECUTIVELY,
   ALL_BLINK_TOGETHER,
-  __COUNT__ // do not remove; always put at end
 };
 
-const modes PROGRAM[] = {
+#define PROGRAMS_COUNT 3
+
+const program_types PROGRAM[PROGRAMS_COUNT] = {
     ALL_BLINK_CONSECUTIVELY,
     ALL_BLINK_TOGETHER,
     ALL_ON
 };
 
-uint8_t programIndex = 0;
+struct ProgramManager {
+    uint8_t programIndex;
+    program_types currProgram;
 
-#define MODE_UPDATE_INTV 8000   // ms
+    long blinkTogetherIntv;
+    long prevBlinkTogetherMillis;
+
+    long blinkConsecIntv;
+    long prevBlinkConsecMillis;
+    int currIndexBlink;
+    int prevIndexBlink;
+
+    ProgramManager();
+    void nextProgram();
+    void handleProgram();
+} programManager;
+
+
+#define MODE_UPDATE_INTV 8888   // ms
 #define DISPLAY_UPDATE_INTV 200 // ms
 
 long prevMillisMode = 0;
 long prevMillisDisplay = 0;
-long currMillisMode = 0;
-long currMillisDisplay = 0;
+long currMillis = 0;
 
 
 void setup() {
@@ -99,16 +116,27 @@ void setup() {
   drawIcons();
 
   prevMillisMode = millis();
-  currMillisMode = millis();
   prevMillisDisplay = millis();
-  currMillisDisplay = millis();
+  currMillis = millis();
 }
 
 
 void loop() {
-    drawIcons();
-    delay(200);
-    eraseAndMoveIcons();
+    currMillis = millis();
+
+    if (currMillis - DISPLAY_UPDATE_INTV >= prevMillisDisplay) {
+        eraseAndMoveIcons();
+        drawIcons();
+
+        prevMillisDisplay = millis();
+    }
+
+    programManager.handleProgram();
+
+    if (currMillis - MODE_UPDATE_INTV >= prevMillisMode) {
+        programManager.nextProgram();
+        prevMillisMode = millis();
+    }
 }
 
 
@@ -136,5 +164,73 @@ void eraseAndMoveIcons() {
       if (icons[f][YPOS] > display.height()) {
         initializeIcon(icons[f]);
       }
+    }
+}
+
+ProgramManager::ProgramManager() :  programIndex(0),
+                                    blinkTogetherIntv(500),
+                                    prevBlinkTogetherMillis(0),
+                                    blinkConsecIntv(500),
+                                    prevBlinkConsecMillis(0),
+                                    currIndexBlink(0),
+                                    prevIndexBlink(0)
+{
+    currProgram = PROGRAM[programIndex];
+}
+
+void ProgramManager::nextProgram() {
+    programIndex++;
+    if (programIndex == PROGRAMS_COUNT)
+        programIndex = 0;
+    currProgram  = PROGRAM[programIndex];
+
+    switch (currProgram) {
+    case ALL_ON:
+    case ALL_BLINK_TOGETHER:
+        for (int i=0; i < NUM_PINS; i++) {
+          digitalWrite(PINS[i], HIGH);
+        }
+        break;
+    case ALL_BLINK_CONSECUTIVELY:
+        currIndexBlink = 0;
+        prevIndexBlink = 0;
+        break;
+    }
+
+    Serial.println((int&)currProgram);
+}
+
+void ProgramManager::handleProgram() {
+    long currMillis = millis();
+
+    switch (currProgram) {
+    case ALL_ON:
+        break;
+    case ALL_BLINK_TOGETHER:
+        if (currMillis - blinkTogetherIntv >= prevBlinkTogetherMillis) {
+            boolean state = digitalRead(PINS[0]);
+            state = !state;
+            for (int i=0; i < NUM_PINS; i++) {
+              digitalWrite(PINS[i], state);
+            }
+            prevBlinkTogetherMillis = millis();
+        }
+
+        break;
+    case ALL_BLINK_CONSECUTIVELY:
+        if (currMillis - blinkConsecIntv >= prevBlinkConsecMillis) {
+            prevIndexBlink = currIndexBlink;
+            if (prevIndexBlink == NUM_PINS - 1) {
+                currIndexBlink = 0;
+            } else {
+                currIndexBlink++;
+            }
+
+            digitalWrite(PINS[prevIndexBlink], LOW);
+            digitalWrite(PINS[currIndexBlink], HIGH);
+
+            prevBlinkConsecMillis = millis();
+        }
+        break;
     }
 }
